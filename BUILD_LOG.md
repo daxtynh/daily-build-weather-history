@@ -37,7 +37,7 @@ Current solutions are:
 
 - Next.js 16 (App Router)
 - Tailwind CSS
-- Meteostat API (via RapidAPI)
+- NOAA Climate Data Online API (free, 1000 requests/day)
 - Census Bureau Geocoder (free, no API key)
 - Vercel Analytics
 
@@ -57,15 +57,15 @@ URLs are structured for SEO:
 ## Environment Variables Needed
 
 ```
-RAPIDAPI_KEY=your_key_from_rapidapi
+NOAA_API_KEY=your_key_from_noaa
 ```
 
-Get your key at: https://rapidapi.com/meteostat/api/meteostat
-Free tier: 500 requests/month
+Get your free key at: https://www.ncdc.noaa.gov/cdo-web/token
+Free tier: 1000 requests/day, 5 requests/second
 
 ## Next Steps
 
-1. Add RapidAPI key via Vercel dashboard: `vercel env add RAPIDAPI_KEY`
+1. Add NOAA key via Vercel dashboard: `vercel env add NOAA_API_KEY`
 2. Add rate limiting to prevent API abuse
 3. Add CSV export (Pro feature)
 4. Add weather embed widget (Pro feature)
