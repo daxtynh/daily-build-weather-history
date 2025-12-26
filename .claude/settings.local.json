@@ -1,0 +1,6 @@
+{
+  "enabledMcpjsonServers": [
+    "llm-brainstorm"
+  ],
+  "enableAllProjectMcpServers": true
+}
