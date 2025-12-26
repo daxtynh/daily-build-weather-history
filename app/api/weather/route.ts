@@ -61,36 +61,45 @@ async function findNearbyStation(lat: string, lon: string, apiKey: string): Prom
   if (data.results && data.results.length > 0) {
     const stations = data.results as Station[];
 
-    // Prioritize official stations (USW = Weather Service, USC = Cooperative)
-    // These have better historical data than personal stations (US1*)
-    const officialStations = stations.filter((s: Station) =>
-      s.id.startsWith('GHCND:USW') || s.id.startsWith('GHCND:USC')
-    );
+    // Filter to only stations with recent data (must have data from 2020 or later)
+    const recentStations = stations.filter((s: Station) => s.maxdate >= '2020-01-01');
 
-    // Score stations: prefer official, high coverage, old mindate, recent maxdate
+    if (recentStations.length === 0) {
+      console.log('No stations with recent data found');
+      return null;
+    }
+
+    // Score stations: prefer official with recent data, high coverage, historical depth
     const scoreStation = (s: Station): number => {
       let score = 0;
-      // Official station bonus
-      if (s.id.startsWith('GHCND:USW')) score += 1000;
-      if (s.id.startsWith('GHCND:USC')) score += 500;
-      // Data coverage (0-100 points)
+
+      // Must have recent data - this is now a prerequisite (filtered above)
+      // But give extra points for very recent data
+      if (s.maxdate >= '2024-01-01') score += 200;
+      else if (s.maxdate >= '2023-01-01') score += 100;
+
+      // Official station bonus (only valuable if they have recent data)
+      if (s.id.startsWith('GHCND:USW')) score += 500;
+      else if (s.id.startsWith('GHCND:USC')) score += 300;
+
+      // Data coverage is very important (0-100 points)
       score += s.datacoverage * 100;
-      // Years of history (up to 100 points for 100+ years)
+
+      // Years of history (up to 50 points for 50+ years)
       const minYear = new Date(s.mindate).getFullYear();
       const historyYears = 2025 - minYear;
-      score += Math.min(historyYears, 100);
-      // Recent data bonus
-      if (s.maxdate >= '2024-01-01') score += 50;
+      score += Math.min(historyYears, 50);
+
       return score;
     };
 
     // Sort by score descending
-    const sortedStations = stations.sort((a: Station, b: Station) =>
+    const sortedStations = recentStations.sort((a: Station, b: Station) =>
       scoreStation(b) - scoreStation(a)
     );
 
     const bestStation = sortedStations[0];
-    console.log(`Selected station: ${bestStation.name} (${bestStation.id}) - data from ${bestStation.mindate} to ${bestStation.maxdate}`);
+    console.log(`Selected station: ${bestStation.name} (${bestStation.id}) - data from ${bestStation.mindate} to ${bestStation.maxdate}, score: ${scoreStation(bestStation)}`);
 
     stationCache.set(cacheKey, { stationId: bestStation.id, timestamp: Date.now() });
     return bestStation.id;
