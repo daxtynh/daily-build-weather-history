@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { formatDate, calculateTrend } from '@/lib/utils';
 
 interface WeatherResult {
@@ -29,73 +29,51 @@ interface GeoData {
   display: string;
 }
 
-export default function Home() {
-  const [zip, setZip] = useState('');
-  const [month, setMonth] = useState('');
-  const [day, setDay] = useState('');
-  const [yearsBack, setYearsBack] = useState(20);
-  const [loading, setLoading] = useState(false);
+export default function WeatherClient({
+  zip,
+  month,
+  day,
+}: {
+  zip: string;
+  month: string;
+  day: string;
+}) {
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<WeatherResult[] | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [location, setLocation] = useState<GeoData | null>(null);
   const [copied, setCopied] = useState(false);
+  const yearsBack = 20;
 
-  const months = [
-    { value: '1', label: 'January' },
-    { value: '2', label: 'February' },
-    { value: '3', label: 'March' },
-    { value: '4', label: 'April' },
-    { value: '5', label: 'May' },
-    { value: '6', label: 'June' },
-    { value: '7', label: 'July' },
-    { value: '8', label: 'August' },
-    { value: '9', label: 'September' },
-    { value: '10', label: 'October' },
-    { value: '11', label: 'November' },
-    { value: '12', label: 'December' },
-  ];
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const geoRes = await fetch('/api/geocode?zip=' + zip);
+        if (!geoRes.ok) {
+          throw new Error('Could not find that zip code');
+        }
+        const geoData: GeoData = await geoRes.json();
+        setLocation(geoData);
 
-  const getDaysInMonth = (m: string) => {
-    if (!m) return 31;
-    const monthNum = parseInt(m);
-    if ([4, 6, 9, 11].includes(monthNum)) return 30;
-    if (monthNum === 2) return 29;
-    return 31;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    setResults(null);
-    setStats(null);
-
-    try {
-      const geoRes = await fetch('/api/geocode?zip=' + zip);
-      if (!geoRes.ok) {
-        throw new Error('Could not find that zip code');
+        const weatherRes = await fetch(
+          '/api/weather?lat=' + geoData.lat + '&lon=' + geoData.lon + '&month=' + month + '&day=' + day + '&years=' + yearsBack
+        );
+        if (!weatherRes.ok) {
+          throw new Error('Could not fetch weather data');
+        }
+        const weatherData = await weatherRes.json();
+        setResults(weatherData.data);
+        setStats(weatherData.stats);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Something went wrong');
+      } finally {
+        setLoading(false);
       }
-      const geoData: GeoData = await geoRes.json();
-      setLocation(geoData);
-
-      const weatherRes = await fetch(
-        '/api/weather?lat=' + geoData.lat + '&lon=' + geoData.lon + '&month=' + month + '&day=' + day + '&years=' + yearsBack
-      );
-      if (!weatherRes.ok) {
-        throw new Error('Could not fetch weather data');
-      }
-      const weatherData = await weatherRes.json();
-      setResults(weatherData.data);
-      setStats(weatherData.stats);
-
-      window.history.pushState({}, '', '/' + zip + '/' + month + '/' + day);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong');
-    } finally {
-      setLoading(false);
     }
-  };
+
+    fetchData();
+  }, [zip, month, day]);
 
   const handleShare = async () => {
     const url = window.location.href;
@@ -119,7 +97,7 @@ export default function Home() {
     ? calculateTrend(results.filter(r => r.avg !== null).map(r => ({ year: r.year, temp: r.avg as number })))
     : null;
 
-  const dateDisplay = month && day ? formatDate(parseInt(month), parseInt(day)) : '';
+  const dateDisplay = formatDate(parseInt(month), parseInt(day));
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
@@ -132,108 +110,31 @@ export default function Home() {
 
       <main className="relative z-10 max-w-4xl mx-auto px-4 py-12">
         <header className="text-center mb-12">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm mb-6">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-            Historical weather data since 2000
-          </div>
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4 tracking-tight">
-            What Was the Weather?
+          <a href="/" className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition mb-6">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            New lookup
+          </a>
+          <h1 className="text-3xl md:text-4xl font-bold text-white mb-2 tracking-tight">
+            Weather on {dateDisplay}
           </h1>
-          <p className="text-slate-400 text-lg max-w-xl mx-auto">
-            Look up the weather for any date going back 20 years.
-            See trends, compare years, find patterns.
+          <p className="text-slate-400 text-lg">
+            {loading ? 'Loading location...' : location ? location.display : 'ZIP ' + zip}
           </p>
         </header>
 
-        <form onSubmit={handleSubmit} className="mb-12">
-          <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 md:p-8 border border-slate-700/50">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <div className="col-span-2 md:col-span-1">
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  ZIP Code
-                </label>
-                <input
-                  type="text"
-                  value={zip}
-                  onChange={(e) => setZip(e.target.value.replace(/\D/g, '').slice(0, 5))}
-                  placeholder="10001"
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-transparent transition"
-                  required
-                  pattern="\d{5}"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Month
-                </label>
-                <select
-                  value={month}
-                  onChange={(e) => setMonth(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-transparent transition appearance-none cursor-pointer"
-                  required
-                >
-                  <option value="">Select</option>
-                  {months.map((m) => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Day
-                </label>
-                <select
-                  value={day}
-                  onChange={(e) => setDay(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-transparent transition appearance-none cursor-pointer"
-                  required
-                >
-                  <option value="">Select</option>
-                  {Array.from({ length: getDaysInMonth(month) }, (_, i) => i + 1).map((d) => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="col-span-2 md:col-span-1">
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Years Back
-                </label>
-                <select
-                  value={yearsBack}
-                  onChange={(e) => setYearsBack(parseInt(e.target.value))}
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-transparent transition appearance-none cursor-pointer"
-                >
-                  <option value={5}>5 years</option>
-                  <option value={10}>10 years</option>
-                  <option value={15}>15 years</option>
-                  <option value={20}>20 years</option>
-                  <option value={25}>25 years</option>
-                </select>
-              </div>
+        {loading && (
+          <div className="flex items-center justify-center py-16">
+            <div className="text-center">
+              <svg className="animate-spin h-8 w-8 text-amber-500 mx-auto mb-4" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <p className="text-slate-400">Fetching {yearsBack} years of weather data...</p>
             </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-900 font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-amber-500/20"
-            >
-              {loading ? (
-                <span className="inline-flex items-center gap-2">
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Looking up weather...
-                </span>
-              ) : (
-                'Look Up Weather'
-              )}
-            </button>
           </div>
-        </form>
+        )}
 
         {error && (
           <div className="mb-8 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-center">
@@ -245,12 +146,9 @@ export default function Home() {
           <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-bold text-white">
-                  {dateDisplay} in {location.display}
+                <h2 className="text-xl font-semibold text-white">
+                  {yearsBack} Years of Data
                 </h2>
-                <p className="text-slate-400">
-                  Weather history for the past {yearsBack} years
-                </p>
               </div>
               <button
                 onClick={handleShare}
