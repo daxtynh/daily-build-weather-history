@@ -9,8 +9,13 @@ interface NOAADataPoint {
   value: number;
 }
 
+interface StationInfo {
+  id: string;
+  name: string;
+}
+
 interface StationCache {
-  stationId: string;
+  station: StationInfo;
   timestamp: number;
 }
 
@@ -28,12 +33,12 @@ interface Station {
   longitude: number;
 }
 
-async function findNearbyStation(lat: string, lon: string, apiKey: string): Promise<string | null> {
+async function findNearbyStation(lat: string, lon: string, apiKey: string): Promise<StationInfo | null> {
   const cacheKey = `${lat},${lon}`;
   const cached = stationCache.get(cacheKey);
 
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.stationId;
+    return cached.station;
   }
 
   // Search for stations within ~50km of the coordinates
@@ -101,8 +106,9 @@ async function findNearbyStation(lat: string, lon: string, apiKey: string): Prom
     const bestStation = sortedStations[0];
     console.log(`Selected station: ${bestStation.name} (${bestStation.id}) - data from ${bestStation.mindate} to ${bestStation.maxdate}, score: ${scoreStation(bestStation)}`);
 
-    stationCache.set(cacheKey, { stationId: bestStation.id, timestamp: Date.now() });
-    return bestStation.id;
+    const stationInfo: StationInfo = { id: bestStation.id, name: bestStation.name };
+    stationCache.set(cacheKey, { station: stationInfo, timestamp: Date.now() });
+    return stationInfo;
   }
 
   return null;
@@ -130,9 +136,9 @@ export async function GET(request: NextRequest) {
   }
 
   // Find a weather station near the coordinates
-  const stationId = await findNearbyStation(lat, lon, apiKey);
+  const station = await findNearbyStation(lat, lon, apiKey);
 
-  if (!stationId) {
+  if (!station) {
     return NextResponse.json({ error: 'No weather station found near this location' }, { status: 404 });
   }
 
@@ -159,7 +165,7 @@ export async function GET(request: NextRequest) {
     try {
       // Fetch just that specific date's data
       const response = await fetch(
-        `${NOAA_BASE_URL}/data?datasetid=GHCND&stationid=${stationId}&startdate=${targetDate}&enddate=${targetDate}&datatypeid=TMAX,TMIN,PRCP,SNOW&units=standard&limit=10`,
+        `${NOAA_BASE_URL}/data?datasetid=GHCND&stationid=${station.id}&startdate=${targetDate}&enddate=${targetDate}&datatypeid=TMAX,TMIN,PRCP,SNOW&units=standard&limit=10`,
         {
           headers: { 'token': apiKey },
           next: { revalidate: 86400 }
@@ -239,7 +245,8 @@ export async function GET(request: NextRequest) {
     warmestYear: temps.length > 0 ? temps.reduce((a, b) => a.temp > b.temp ? a : b) : null,
     coldestYear: temps.length > 0 ? temps.reduce((a, b) => a.temp < b.temp ? a : b) : null,
     dataPoints: results.length,
-    stationId // Include station ID for transparency
+    stationId: station.id,
+    stationName: station.name
   };
 
   return NextResponse.json({ data: results, stats });

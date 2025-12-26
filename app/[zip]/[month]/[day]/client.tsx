@@ -19,6 +19,8 @@ interface Stats {
   warmestYear: { year: number; temp: number } | null;
   coldestYear: { year: number; temp: number } | null;
   dataPoints: number;
+  stationId?: string;
+  stationName?: string;
 }
 
 interface GeoData {
@@ -291,14 +293,14 @@ export default function WeatherClient({
                 </table>
               </div>
               <div className="px-4 py-3 bg-slate-900/30 border-t border-slate-700/30 text-sm text-slate-500">
-                {stats.dataPoints} years of data from Meteostat
+                {stats.dataPoints} years of data from {stats.stationName ? stats.stationName : 'NOAA'}
               </div>
             </div>
           </div>
         )}
 
         <footer className="mt-16 pt-8 border-t border-slate-800 text-center text-slate-500 text-sm">
-          <p>Weather data provided by Meteostat. Not for critical planning.</p>
+          <p>Weather data provided by NOAA Climate Data Online. Not for critical planning.</p>
         </footer>
       </main>
     </div>
